@@ -119,6 +119,18 @@ Notes from Veeam's documentation (VBR 13.1):
 | Details | Filesystem usage per mount, table of Veeam components with versions |
 | Syslog | Events per severity over time, the event list |
 
+**Dashboards > Lab > "Veeam lab - proxies"** (`veeam-proxies.json`) shows the proxy fleet side by side. Its
+**Proxy** selector offers All or any set of proxies, i.e. the Prometheus targets with `role: proxy`.
+
+| Row | Panels |
+|---|---|
+| Top | Proxies down, transport service not running (`veeamtransport.service` = the data mover), Veeam services failed, proxies monitored, busiest CPU |
+| Fleet table | One row per proxy: Node Exporter up/down, transport service, CPU / memory / root filesystem gauges, network in+out, uptime |
+| Charts | One line per proxy: CPU busy, memory used, network throughput, disk throughput (HotAdd reads show up as disk) |
+| Syslog | Events per proxy over time, the proxies' log lines |
+
+The top-row counters are red only when something is wrong. During a backup job, watch network and disk throughput.
+
 Changes saved in the browser are kept, unless you deploy the JSON file again.
 
 ### Useful log searches (Explore > Loki > Code)
@@ -137,11 +149,11 @@ Labels: `host` (sending appliance), `app` (application name), `severity`, `job="
 
 ## Common tasks
 
-**Add an appliance** (for example a prx proxy) **to the metrics:** enable Node Exporter for it in VBR, then on grafana01 add a target to the `veeam-appliances` job in `/etc/prometheus/prometheus.yml`:
+**Add an appliance to the metrics.** In the lab, vbr02 (`role: vsa`), prx-01..04 (`role: proxy`) and vhr01 (`role: hardened-repo`) are already in. For a new one: enable Node Exporter for it in VBR, then on grafana01 add a target to the `veeam-appliances` job in `/etc/prometheus/prometheus.yml`:
 
 ```yaml
       - targets: ['192.168.2.190:443']
-        labels: { host: prx-01, role: via }
+        labels: { host: prx-01, role: proxy }      # role: proxy -> appears in the proxies dashboard
 ```
 
 Then run `sudo systemctl reload prometheus`. It appears in the dashboard's appliance selector. Appliance syslog needs nothing extra: VBR pushes the setting to all appliances.
@@ -186,7 +198,7 @@ Everything is in this repository (local working copy also in `~/veeam-lab/grafan
    2. Put the Cloudflare token on the VM (command above), then `cert-grafana01.sh`: wildcard certificate and Grafana HTTPS.
    3. `syslog-rsyslog.sh`: rsyslog in front of Alloy, including the SELinux port label for 1514.
    4. `cert-syslog.sh`: the named certificate for 6514.
-4. Copy `veeam-lab.json` to `/var/lib/grafana/dashboards/` and `dash-provider.yaml` to `/etc/grafana/provisioning/dashboards/lab.yaml`, then restart Grafana.
+4. Copy `veeam-lab.json` and `veeam-proxies.json` to `/var/lib/grafana/dashboards/` and `dash-provider.yaml` to `/etc/grafana/provisioning/dashboards/lab.yaml`, then restart Grafana.
 
 | File | Purpose |
 |---|---|
@@ -196,6 +208,6 @@ Everything is in this repository (local working copy also in `~/veeam-lab/grafan
 | `cert-grafana01.sh` | Wildcard certificate, Grafana HTTPS, renewal hook |
 | `syslog-rsyslog.sh` | rsyslog receiver (514/6514) → Alloy; firewall |
 | `cert-syslog.sh` | Named certificate for the TLS syslog receiver, renewal hook |
-| `veeam-lab.json`, `dash-provider.yaml` | The dashboard and its provisioning |
+| `veeam-lab.json`, `veeam-proxies.json`, `dash-provider.yaml` | The two dashboards and their provisioning |
 
 The scripts are safe to run again. The ones in this folder are the final working versions.
