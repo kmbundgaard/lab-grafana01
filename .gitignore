@@ -1,0 +1,12 @@
+# Never commit secrets, certificates or generated media
+*.enc
+*.key
+*.p12
+*.pfx
+*.pem
+*.crt
+*.csr
+*.token
+cloudflare.ini
+*.iso
+.DS_Store
