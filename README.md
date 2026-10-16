@@ -119,6 +119,26 @@ Notes from Veeam's documentation (VBR 13.1):
 | Details | Filesystem usage per mount, table of Veeam components with versions |
 | Syslog | Events per severity over time, the event list |
 
+**Dashboards > Lab > "Veeam lab - overview"** (`veeam-overview.json`) is the start page: every appliance on one
+page, grouped by role (`vsa` = VBR server, `hardened-repo` = repository, `proxy`). The **Role** and **Appliance**
+selectors filter everything on the page.
+
+| Row | Panels |
+|---|---|
+| Top | Appliances down, key Veeam services not running, Veeam services failed, fullest filesystem (orange from 80 %, red from 90 %), appliances monitored |
+| Per role | VBR servers / repositories / proxies: up vs. monitored |
+| Table | One row per appliance: role, Node Exporter, key services, CPU / memory / fullest filesystem gauges, network, uptime, Veeam version |
+| Charts | CPU, memory, network and fullest filesystem per appliance |
+| Syslog | Warnings and worse per appliance, plus the latest lines (the harmless `logcollector` / `file is not set` lines are filtered out) |
+
+**Key services** per role, i.e. what turns "key services" red:
+
+| Role | Services |
+|---|---|
+| VBR server | `veeambackupsvc`, `veeambrokersvc`, `postgresql-17` (configuration database), `veeamrestapisvc`, `veeamidentitysvc` |
+| Repository | `veeamimmurepo` (immutability), `veeamtransport` |
+| Proxy | `veeamtransport` (the data mover) |
+
 **Dashboards > Lab > "Veeam lab - proxies"** (`veeam-proxies.json`) shows the proxy fleet side by side. Its
 **Proxy** selector offers All or any set of proxies, i.e. the Prometheus targets with `role: proxy`.
 
@@ -245,7 +265,7 @@ Everything is in this repository (local working copy also in `~/veeam-lab/grafan
    2. Put the Cloudflare token on the VM (command above), then `cert-grafana01.sh`: wildcard certificate and Grafana HTTPS.
    3. `syslog-rsyslog.sh`: rsyslog in front of Alloy, including the SELinux port label for 1514.
    4. `cert-syslog.sh`: the named certificate for 6514.
-4. Copy `veeam-lab.json` and `veeam-proxies.json` to `/var/lib/grafana/dashboards/` and `dash-provider.yaml` to `/etc/grafana/provisioning/dashboards/lab.yaml`, then restart Grafana.
+4. Copy the `veeam-*.json` dashboards to `/var/lib/grafana/dashboards/` and `dash-provider.yaml` to `/etc/grafana/provisioning/dashboards/lab.yaml`, then restart Grafana.
 
 | File | Purpose |
 |---|---|
@@ -255,6 +275,6 @@ Everything is in this repository (local working copy also in `~/veeam-lab/grafan
 | `cert-grafana01.sh` | Wildcard certificate, Grafana HTTPS, renewal hook |
 | `syslog-rsyslog.sh` | rsyslog receiver (514/6514) → Alloy; firewall |
 | `cert-syslog.sh` | Named certificate for the TLS syslog receiver, renewal hook |
-| `veeam-lab.json`, `veeam-proxies.json`, `dash-provider.yaml` | The two dashboards and their provisioning |
+| `veeam-overview.json`, `veeam-lab.json`, `veeam-proxies.json`, `dash-provider.yaml` | The dashboards and their provisioning |
 
 The scripts are safe to run again. The ones in this folder are the final working versions.
