@@ -145,6 +145,40 @@ sum by (host, app) (count_over_time({job="syslog"}[1h]))             # who sends
 
 Labels: `host` (sending appliance), `app` (application name), `severity`, `job="syslog"`.
 
+### Finding failed logins
+
+One failed login to the **VBR console** produces four records in the same second (seen 2026-10-16, user
+`veeamso` from vone 192.168.2.108):
+
+| `app` | Text | Good for |
+|---|---|---|
+| `Veeam_Security` | `instanceId=44002 … SourceIpAddress="<client>" … "Authorization was denied: an authentication has failed."` | **VBR console logins, with the client IP** |
+| `unix_chkpwd` | `password check failed for user (veeamso)` | Short, names the user |
+| `audisp-syslog` | `type=USER_AUTH … acct="veeamso" … res=failed` | The Linux audit record (only arrives over **TLS**) |
+| `dotnet` | `PAM Service fails with PAM_AUTH_ERR. Authentication failure` | Technical detail |
+
+Logins to the **Host Management Console** (`:10443`) come from `veeamhostmanager`:
+`Event:[Security] Invoked by:[Veeam Administrator][veeamadmin] Description: [User Login.] …`.
+
+Explore > Loki, switch the editor to **Code** (Builder mode treats a pasted query as literal text), and set the
+time range wide enough:
+
+```logql
+# all failed logins on vbr02, every source
+{host="vbr02"} |~ "res=failed|password check failed|instanceId=44002"
+
+# VBR console failures with the client IP as its own field
+{host="vbr02", app="Veeam_Security"} |= "instanceId=44002" | regexp `SourceIpAddress="(?P<client_ip>[^"]+)"`
+
+# failed audit authentications with the user as its own field
+{app="audisp-syslog"} |= "type=USER_AUTH" |= "res=failed" | regexp `acct="(?P<user>[^"]+)"`
+
+# Host Management Console logins / logouts
+{host="vbr02", app="veeamhostmanager"} |= "Event:[Security]"
+```
+
+Don't filter on `severity="informational"`: failed logins often arrive as **warning** (`44002` is `[WRN]`).
+
 ---
 
 ## Common tasks
@@ -157,6 +191,18 @@ Labels: `host` (sending appliance), `app` (application name), `severity`, `job="
 ```
 
 Then run `sudo systemctl reload prometheus`. It appears in the dashboard's appliance selector. Appliance syslog needs nothing extra: VBR pushes the setting to all appliances.
+
+**Add a new proxy (step by step):**
+1. Deploy it (AutoDeploy) and make sure VBR's Node Exporter setting covers it. VBR pushes it to every appliance;
+   check with `curl -sk https://<proxy-ip>/metrics | head -3` from grafana01.
+2. On grafana01, add it to `/etc/prometheus/prometheus.yml` under `job_name: veeam-appliances`:
+   ```yaml
+         - targets: ['<proxy-ip>:443']
+           labels: { host: prx-05, role: proxy }
+   ```
+3. `sudo /usr/local/bin/promtool check config /etc/prometheus/prometheus.yml && sudo systemctl reload prometheus`
+4. Within a minute it shows as `up` (Prometheus targets page or the dashboards), and appears in the **Proxy** selector
+   of "Veeam lab - proxies". Its syslog arrives by itself: VBR pushes the syslog settings to all appliances.
 
 **Add another Linux machine:** install node_exporter on it, add `<ip>:9100` to the `node` job, then reload Prometheus.
 
@@ -182,6 +228,7 @@ ssh labadmin@192.168.2.13 'for s in grafana-server prometheus node_exporter loki
 | Plain TCP/UDP gives no logins | Expected: audit and login events go only over TLS. |
 | "Failed to fetch" in a panel | Grafana was restarting (after a certificate renewal, for example). Reload the page. |
 | Setting changed in VBR but nothing happens | It's pushed to the appliances only about every 5 minutes. |
+| Every appliance logs `cannot resolve hostname 'logcollector'` (ERROR) together with `certificate file is not set` / `key file is not set` (WARN), from rsyslog `v8.2412.0-…el9_6_ciq` | **Harmless, not our setup.** The three lines come from the appliance's **built-in** rsyslog configuration and appear together each time it restarts rsyslog (for example when VBR pushes the syslog settings). `logcollector` is a forwarding target in Veeam's own configuration that the lab DNS doesn't know (not in the Veeam docs). The two warnings mean the appliance has no *client* certificate, which is expected because grafana01 doesn't require mutual TLS. Delivery to grafana01 isn't affected. Don't change the appliance config (unsupported, KB4772) and don't create a `logcollector` DNS record (unknown what would be sent there). Ask Veeam support if you want to know what it's for. To hide the lines in Explore, add `!~ "logcollector\|file is not set"`. |
 
 ---
 
