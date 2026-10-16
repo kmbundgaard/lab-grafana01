@@ -139,6 +139,30 @@ selectors filter everything on the page.
 | Repository | `veeamimmurepo` (immutability), `veeamtransport` |
 | Proxy | `veeamtransport` (the data mover) |
 
+**Dashboards > Lab > "Veeam lab - repositories"** (`veeam-repositories.json`, Prometheus `role: hardened-repo`).
+Its job is to show whether the backups still fit:
+
+| Row | Panels |
+|---|---|
+| Top | Repositories down, immutability service (`veeamimmurepo`) not running, transport not running, backup volume used (orange 80 %, red 90 %), **estimated days until full** (red under 14 days, orange under 30) |
+| Capacity | Used % per repository, size / used / free of `/var/lib/veeam` (the volume that holds the backups) |
+| Charts | Used space vs. size over time, write throughput (backups landing), network in (data from proxies), CPU |
+| Detail | All XFS filesystems, syslog warnings and worse |
+
+"Days until full" = free space divided by its growth over the last 24 h. It needs at least a day of history and
+swings with retention and merges, so treat it as a trend. It shows "not growing" when free space isn't shrinking.
+
+**Dashboards > Lab > "Veeam lab - VBR servers"** (`veeam-vbr.json`, `role: vsa`):
+
+| Row | Panels |
+|---|---|
+| Top | VBR servers down, key VBR services not running (backup, broker, PostgreSQL, REST API, identity), Veeam services failed, memory, fullest data volume |
+| Services | Table of every Veeam and PostgreSQL service with its state (failed in red) |
+| Charts | CPU, memory, data volumes, component versions, network, disk |
+| Syslog | VBR job and session events by severity, the events themselves (`Veeam_MP`, `Veeam_Backup`), and security events (`Veeam_Security`: logins, tokens, authorization) |
+
+All dashboards link back to the overview (top right).
+
 **Dashboards > Lab > "Veeam lab - proxies"** (`veeam-proxies.json`) shows the proxy fleet side by side. Its
 **Proxy** selector offers All or any set of proxies, i.e. the Prometheus targets with `role: proxy`.
 
@@ -275,6 +299,6 @@ Everything is in this repository (local working copy also in `~/veeam-lab/grafan
 | `cert-grafana01.sh` | Wildcard certificate, Grafana HTTPS, renewal hook |
 | `syslog-rsyslog.sh` | rsyslog receiver (514/6514) → Alloy; firewall |
 | `cert-syslog.sh` | Named certificate for the TLS syslog receiver, renewal hook |
-| `veeam-overview.json`, `veeam-lab.json`, `veeam-proxies.json`, `dash-provider.yaml` | The dashboards and their provisioning |
+| `veeam-overview.json`, `veeam-vbr.json`, `veeam-repositories.json`, `veeam-proxies.json`, `veeam-lab.json`, `dash-provider.yaml` | The dashboards (overview, VBR servers, repositories, proxies, single appliance) and their provisioning |
 
 The scripts are safe to run again. The ones in this folder are the final working versions.
